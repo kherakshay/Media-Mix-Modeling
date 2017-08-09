@@ -1,0 +1,196 @@
+﻿proc means data = ak.mmm nmiss;
+run;
+
+data ak.mmm;
+ set ak.mmm;
+if sales_lag1  = . then sales_lag1 = 0;
+if Unaided_Awareness_lag1  = . then Unaided_Awareness_lag1 = 0;
+if Unique_web_visitors_lag1  = . then Unique_web_visitors_lag1 = 0;
+if DM_LAG1  = . then DM_LAG1 = 0;
+if DM_LAG2  = . then DM_LAG2 = 0;
+if DM_LAG3  = . then DM_LAG3 = 0;
+if DM_LAG4  = . then DM_LAG4 = 0;
+if DM_LAG5  = . then DM_LAG5 = 0;
+if DRTV_longform_LAG1  = . then DRTV_longform_LAG1 = 0;
+if DRTV_longform_LAG2  = . then DRTV_longform_LAG2 = 0;
+if DRTV_longform_LAG3  = . then DRTV_longform_LAG3 = 0;
+if DRTV_longform_LAG4  = . then DRTV_longform_LAG4 = 0;
+if DRTV_longform_LAG5  = . then DRTV_longform_LAG5 = 0;
+if DRTV_shortform_LAG1  = . then DRTV_shortform_LAG1 = 0;
+if DRTV_shortform_LAG2  = . then DRTV_shortform_LAG2 = 0;
+if DRTV_shortform_LAG3  = . then DRTV_shortform_LAG3 = 0;
+if DRTV_shortform_LAG4  = . then DRTV_shortform_LAG4 = 0;
+if DRTV_shortform_LAG5  = . then DRTV_shortform_LAG5 = 0;
+if NATIONALTV_LAG1  = . then NATIONALTV_LAG1 = 0;
+if NATIONALTV_LAG2  = . then NATIONALTV_LAG2 = 0;
+if NATIONALTV_LAG3  = . then NATIONALTV_LAG3 = 0;
+if NATIONALTV_LAG4  = . then NATIONALTV_LAG4 = 0;
+if NATIONALTV_LAG5  = . then NATIONALTV_LAG5 = 0;
+if RADIO_LAG1  = . then RADIO_LAG1 = 0;
+if RADIO_LAG2  = . then RADIO_LAG2 = 0;
+if RADIO_LAG3  = . then RADIO_LAG3 = 0;
+if RADIO_LAG4  = . then RADIO_LAG4 = 0;
+if RADIO_LAG5  = . then RADIO_LAG5 = 0;
+if NATIONALPRINT_LAG1  = . then NATIONALPRINT_LAG1 = 0;
+if NATIONALPRINT_LAG2  = . then NATIONALPRINT_LAG2 = 0;
+if NATIONALPRINT_LAG3  = . then NATIONALPRINT_LAG3 = 0;
+if NATIONALPRINT_LAG4  = . then NATIONALPRINT_LAG4 = 0;
+if NATIONALPRINT_LAG5  = . then NATIONALPRINT_LAG5 = 0;
+run;
+
+proc reg data = ak.mmm;
+model sales = unique_web_visitors unaided_awareness national_tv drtv_longform_lag1 drtv_shortform 
+              nationalprint_lag1 nationalprint_lag3 nationalprint_lag4
+              dm_lag1 dm_lag2 sales_lag1;
+output out = resid p = PUNITS r = RUNITS student = student;
+run;
+quit;
+
+data ak.mmm;
+set resid;
+positive = 0;
+negative = 0;
+if student > 3.00 then positive = 1;
+if student < -3.00 then negative = 1;
+run;
+
+data ak.mmm;
+ set ak.mmm;
+ total_client_real = exp(total_CLIENT);
+ total_CS_real = exp(total_CS);
+ sov_real = total_CLIENT_real/total_CS_real;
+ sov = log(sov_real);
+run;
+
+/*** Modeling ***/
+
+/*** original Model ***/
+proc syslin data = ak.mmm 2sls out = predicted first;
+endogenous  sales Unique_web_visitors Unaided_Awareness;
+instruments window TOM sales_lag1 Unique_web_visitors_lag1 Unaided_Awareness_lag1 
+            positive digital_SEM;
+
+units: model sales =   
+             unique_web_visitors unaided_awareness
+             national_tv drtv_longform_lag1 drtv_shortform nationalprint_lag1 nationalprint_lag3 nationalprint_lag4
+             dm_lag1 dm_lag2 sales_lag1;
+output p = pred_units;
+
+visits: model Unique_web_visitors = 	
+	          DRTV_longform_LAG1 DRTV_longform_LAG2 DRTV_longform_LAG3 DRTV_longform_LAG4		
+	          DRTV_longform_LAG5 DRTV_shortform_lag1 digital_SEM_DM digital_SEM_DRTV_long 	
+	          digital_SEM_DRTV_short DIGITAL_SEM window Unique_web_visitors_lag1;
+output p = pred_webvisitors;
+
+aware:	model Unaided_Awareness =  
+	          LOCAL_TV LOCAL_PRINT NATIONALTV_LAG2 NATIONALTV_LAG3 NATIONALTV_LAG4 NATIONALTV_LAG5
+	          digital NATIONALPRINT_LAG1 NATIONALPRINT_LAG3 NATIONALPRINT_LAG4 NATIONALPRINT_LAG5		
+              sponsorship_events Unaided_Awareness_lag1;
+output p = pred_una;
+run;
+
+/*** my model ***/
+proc syslin data = ak.mmm 2sls out = predicted first;
+endogenous  sales Unique_web_visitors Unaided_Awareness;
+instruments window sales_lag1 
+            positive local_tv	national_tv DRTV_longform
+DRTV_longform_local_print	DRTV_shortform
+DRTV_shortform_local_print	digital_displayads	digital_SEM	digital_mobile	digital_video	
+digital	Digital_SEM_local_print	digital_SEM_DRTV_long	digital_SEM_DRTV_short	
+digital_SEM_NationalTV	digital_SEM_National_print	DM
+EM	national_print local_print	radio sponsorship_events	dr_other	Unique_web_visitors_lag1 sov;
+
+units: model sales =   
+            Unaided_Awareness Unique_web_visitors TOM sales_lag1 
+            positive local_tv	national_tv 
+			DRTV_longform_LAG1
+			digital_displayads	digital_SEM	digital_mobile	
+digital	Digital_SEM_local_print		
+digital_SEM_NationalTV	digital_SEM_National_print	DM_LAG1
+EM	national_print local_print	radio sponsorship_events	dr_other sov;
+output p = pred_units;
+
+visits: model Unique_web_visitors = 	
+	          TOM Unaided_Awareness_lag1
+            positive national_tv DRTV_longform
+DRTV_longform_local_print	DRTV_shortform
+DRTV_shortform_local_print	digital_SEM	digital_mobile	digital_video	
+Digital_SEM_local_print	digital_SEM_DM	digital_SEM_DRTV_long	digital_SEM_DRTV_short	
+digital_SEM_NationalTV	DM_LAG3
+nationalprint_lag1 local_print	radio sponsorship_events Unique_web_visitors_lag1 sov;
+output p = pred_webvisitors;
+
+aware:	model Unaided_Awareness =  
+	          window TOM sales_lag1 Unaided_Awareness_lag1
+            positive national_tv DRTV_longform
+DRTV_longform_local_print	DRTV_shortform
+DRTV_shortform_local_print	digital_displayads	
+digital	Digital_SEM_local_print	digital_SEM_DM	digital_SEM_DRTV_long	digital_SEM_DRTV_short	
+digital_SEM_NationalTV	digital_SEM_National_print	DM
+EM	national_print local_print	radio dr_other	Unique_web_visitors_lag1 sov;
+output p = pred_una;
+run;
+
+proc means data = ak.mmm mean;
+run;
+
+/*** Tobit Model ***/
+
+/*** Example ***/
+
+data a2;
+      keep y1 y2 x1 x2;
+      do i = 1 to 500;
+         x1 = rannor( 19283 );
+         x2 = rannor( 98721 );
+         u1 = rannor( 76527 );
+         u2 = rannor( 65721 );
+         y1l = 1 + 2 * x1 + 3 * x2 + u1;
+         y2l = 3 + 4 * x1 - 2 * x2 + u1*.2 + u2;
+         if ( y1l > 0 ) then y1 = 1;
+         else                y1 = 0;
+         if ( y1l > 0 ) then y2 = y2l;
+         else                y2 = 0;
+         output;
+      end;
+run;
+
+/*
+proc lifereg data = ak.mmm;
+  model sales*window(1) = total_client local_tv national_tv DRTV_longform DRTV_shortform	
+               digital_SEM digital_mobile digital DM EM national_print
+               local_print sponsorship_events	Unique_web_visitors /d=normal;
+run;
+*/
+
+data ak.mmm;
+ set ak.mmm;
+  sales_new = sales;
+  if window = 0 then sales_new = 0;
+  total_client_zero = total_client;
+  total_client_one = total_client;
+  if window = 1 then total_client_zero = 0; 
+  if window = 0 then total_client_one = 0; 
+run;
+
+proc qlim data = ak.mmm method=qn;
+       model window = total_CLIENT / discrete;
+       *model sales_new = total_CLIENT / select(window=0);
+run;
+
+
+proc qlim data = ak.mmm;
+ model sales = total_client local_tv national_tv DRTV_longform DRTV_shortform	
+               digital_SEM digital_mobile digital DM EM national_print
+               local_print sponsorship_events Unique_web_visitors;
+ endogenous sales ~ censored(lb=1);
+output out = prob predicted prob proball;   
+run;
+
+proc reg data = ak.mmm;
+model sales = local_tv national_tv DRTV_longform DRTV_shortform	
+               digital_SEM digital_mobile digital DM EM national_print
+               local_print sponsorship_events Unique_web_visitors total_client_zero;
+output out = resid p = PUNITS r = RUNITS student = student;
+run;
+quit;
